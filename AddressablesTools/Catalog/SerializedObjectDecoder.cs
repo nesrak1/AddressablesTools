@@ -144,7 +144,7 @@ namespace AddressablesTools.Catalog
                     bw.Write((byte)ObjectType.JsonObject);
                     WriteString1(bw, jsonObject.AssemblyName);
                     WriteString1(bw, jsonObject.ClassName);
-                    WriteString4(bw, jsonObject.JsonText);
+                    WriteString4Unicode(bw, jsonObject.JsonText);
                     break;
                 }
 
@@ -181,20 +181,23 @@ namespace AddressablesTools.Catalog
             if (str.Length > 255)
                 throw new ArgumentException("String length cannot be greater than 255.");
 
-            bw.Write((byte)str.Length);
-            bw.Write(Encoding.ASCII.GetBytes(str));
+            byte[] bytes = Encoding.ASCII.GetBytes(str);
+            bw.Write((byte)bytes.Length);
+            bw.Write(bytes);
         }
 
         private static void WriteString4(BinaryWriter bw, string str)
         {
-            bw.Write(str.Length);
-            bw.Write(Encoding.ASCII.GetBytes(str));
+            byte[] bytes = Encoding.ASCII.GetBytes(str);
+            bw.Write(bytes.Length);
+            bw.Write(bytes);
         }
 
         private static void WriteString4Unicode(BinaryWriter bw, string str)
         {
-            bw.Write(str.Length);
-            bw.Write(Encoding.Unicode.GetBytes(str));
+            byte[] bytes = Encoding.Unicode.GetBytes(str);
+            bw.Write(bytes.Length);
+            bw.Write(bytes);
         }
     }
 }

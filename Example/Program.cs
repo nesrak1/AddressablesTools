@@ -67,18 +67,19 @@ static void PatchCrcExample(string[] args)
             if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
             {
                 var data = rsrc.Data;
-                if (data != null && data is string dataString)
+                if (data != null && data is ClassJsonObject classJsonObject)
                 {
                     JsonSerializerOptions options = new JsonSerializerOptions()
                     {
                         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                     };
 
-                    JsonObject? jsonObj = JsonSerializer.Deserialize<JsonObject>(dataString);
+                    JsonObject? jsonObj = JsonSerializer.Deserialize<JsonObject>(classJsonObject.JsonText);
                     if (jsonObj != null)
                     {
                         jsonObj["m_Crc"] = 0;
-                        rsrc.Data = JsonSerializer.Serialize(jsonObj, options);
+                        classJsonObject.JsonText = JsonSerializer.Serialize(jsonObj, options);
+                        rsrc.Data = classJsonObject;
                     }
                 }
             }
