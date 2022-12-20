@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="AssetsTools.NET">
+      <HintPath>..\..\..\..\GitReposLocal\AssetsTools.NET\AssetTools.NET\bin\Debug\netstandard2.0\AssetsTools.NET.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
