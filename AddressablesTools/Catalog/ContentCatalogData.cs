@@ -17,6 +17,7 @@ namespace AddressablesTools.Catalog
         // used for resources, shouldn't be edited directly
         private string[] ProviderIds { get; set; }
         private string[] InternalIds { get; set; }
+        private string[] Keys { get; set; } // for old versions
         private SerializedType[] ResourceTypes { get; set; }
         private string[] InternalIdPrefixes { get; set; } // todo
 
@@ -51,6 +52,19 @@ namespace AddressablesTools.Catalog
                 InternalIds[i] = data.m_InternalIds[i];
             }
 
+            if (data.m_Keys != null)
+            {
+                Keys = new string[data.m_Keys.Length];
+                for (int i = 0; i < Keys.Length; i++)
+                {
+                    Keys[i] = data.m_Keys[i];
+                }
+            }
+            else
+            {
+                Keys = null;
+            }
+
             ResourceTypes = new SerializedType[data.m_resourceTypes.Length];
             for (int i = 0; i < ResourceTypes.Length; i++)
             {
@@ -58,10 +72,17 @@ namespace AddressablesTools.Catalog
                 ResourceTypes[i].Read(data.m_resourceTypes[i]);
             }
 
-            InternalIdPrefixes = new string[data.m_InternalIdPrefixes.Length];
-            for (int i = 0; i < InternalIdPrefixes.Length; i++)
+            if (data.m_InternalIdPrefixes != null)
             {
-                InternalIdPrefixes[i] = data.m_InternalIdPrefixes[i];
+                InternalIdPrefixes = new string[data.m_InternalIdPrefixes.Length];
+                for (int i = 0; i < InternalIdPrefixes.Length; i++)
+                {
+                    InternalIdPrefixes[i] = data.m_InternalIdPrefixes[i];
+                }
+            }
+            else
+            {
+                InternalIdPrefixes = null;
             }
 
             ReadResources(data);
@@ -144,7 +165,17 @@ namespace AddressablesTools.Catalog
                         objData = SerializedObjectDecoder.Decode(extraReader);
                     }
 
-                    object primaryKey = keys[primaryKeyIndex];
+                    object primaryKey;
+                    if (Keys == null)
+                    {
+                        primaryKey = keys[primaryKeyIndex];
+                    }
+                    else
+                    {
+                        // unity moment
+                        primaryKey = Keys[primaryKeyIndex];
+                    }
+
                     SerializedType resourceType = ResourceTypes[resourceTypeIndex];
 
                     var loc = new ResourceLocation();
@@ -197,6 +228,19 @@ namespace AddressablesTools.Catalog
                 data.m_InternalIds[i] = InternalIds[i];
             }
 
+            if (Keys != null)
+            {
+                data.m_Keys = new string[Keys.Length];
+                for (int i = 0; i < data.m_Keys.Length; i++)
+                {
+                    data.m_Keys[i] = Keys[i];
+                }
+            }
+            else
+            {
+                data.m_Keys = null;
+            }
+
             data.m_resourceTypes = new SerializedTypeJson[ResourceTypes.Length];
             for (int i = 0; i < data.m_resourceTypes.Length; i++)
             {
@@ -204,10 +248,17 @@ namespace AddressablesTools.Catalog
                 ResourceTypes[i].Write(data.m_resourceTypes[i]);
             }
 
-            data.m_InternalIdPrefixes = new string[InternalIdPrefixes.Length];
-            for (int i = 0; i < data.m_InternalIdPrefixes.Length; i++)
+            if (InternalIdPrefixes != null)
             {
-                data.m_InternalIdPrefixes[i] = InternalIdPrefixes[i];
+                data.m_InternalIdPrefixes = new string[InternalIdPrefixes.Length];
+                for (int i = 0; i < data.m_InternalIdPrefixes.Length; i++)
+                {
+                    data.m_InternalIdPrefixes[i] = InternalIdPrefixes[i];
+                }
+            }
+            else
+            {
+                data.m_InternalIdPrefixes = null;
             }
         }
 

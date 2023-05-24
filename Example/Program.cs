@@ -28,9 +28,10 @@ static void SearchExample(string[] args)
     {
         if (k is string s && s.ToLower().Contains(search))
         {
-            Console.WriteLine(s);
+            Console.Write(s);
             foreach (var rsrc in ccd.Resources[s])
             {
+                Console.WriteLine($" ({rsrc.ProviderId})");
                 if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.BundledAssetProvider")
                 {
                     List<ResourceLocation> o = ccd.Resources[rsrc.Dependency];
@@ -87,6 +88,8 @@ static void PatchCrcExample(string[] args)
     }
 
     File.WriteAllText(args[1] + ".patched", AddressablesJsonParser.ToJson(ccd));
+    File.Move(args[1], args[1] + ".old");
+    File.Move(args[1] + ".patched", args[1]);
 }
 
 if (args.Length < 1)
