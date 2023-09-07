@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 
 namespace AddressablesTools.Catalog
 {
@@ -203,7 +202,7 @@ namespace AddressablesTools.Catalog
 
             data.m_InstanceProviderData = new ObjectInitializationDataJson();
             InstanceProviderData.Write(data.m_InstanceProviderData);
-            
+
             data.m_SceneProviderData = new ObjectInitializationDataJson();
             SceneProviderData.Write(data.m_SceneProviderData);
 
@@ -300,6 +299,12 @@ namespace AddressablesTools.Catalog
             List<SerializedType> newResourceTypes = newResourceTypeHs.ToList();
             List<ResourceLocation> newLocations = newLocationHs.ToList();
 
+            Dictionary<object, int> newKeyToIndex = MakeDictionaryList(newKeys);
+            Dictionary<string, int> newInternalIdsToIndex = MakeDictionaryList(newInternalIds);
+            Dictionary<string, int> newProviderIdsToIndex = MakeDictionaryList(newProviderIds);
+            Dictionary<SerializedType, int> newResourceTypesToIndex = MakeDictionaryList(newResourceTypes);
+            Dictionary<ResourceLocation, int> newLocationsToIndex = MakeDictionaryList(newLocations);
+
             MemoryStream entryDataStream = new MemoryStream();
             MemoryStream extraDataStream = new MemoryStream();
             using (BinaryWriter entryWriter = new BinaryWriter(entryDataStream))
@@ -309,9 +314,9 @@ namespace AddressablesTools.Catalog
 
                 foreach (var location in newLocationHs)
                 {
-                    int internalIdIndex = newInternalIds.IndexOf(location.InternalId);
-                    int providerIndex = newProviderIds.IndexOf(location.ProviderId);
-                    int dependencyKeyIndex = (location.Dependency == null) ? -1 : newKeys.IndexOf(location.Dependency);
+                    int internalIdIndex = newInternalIdsToIndex[location.InternalId];
+                    int providerIndex = newProviderIdsToIndex[location.ProviderId];
+                    int dependencyKeyIndex = (location.Dependency == null) ? -1 : newKeyToIndex[location.Dependency];
                     int depHash = location.DependencyHashCode; // todo calculate this
                     int dataIndex = -1;
                     if (location.Data != null)
@@ -319,8 +324,8 @@ namespace AddressablesTools.Catalog
                         dataIndex = (int)extraDataStream.Position;
                         SerializedObjectDecoder.Encode(extraWriter, location.Data);
                     }
-                    int primaryKeyIndex = newKeys.IndexOf(location.PrimaryKey);
-                    int resourceTypeIndex = newResourceTypes.IndexOf(location.Type);
+                    int primaryKeyIndex = newKeyToIndex[location.PrimaryKey];
+                    int resourceTypeIndex = newResourceTypesToIndex[location.Type];
 
                     entryWriter.Write(internalIdIndex);
                     entryWriter.Write(providerIndex);
@@ -356,7 +361,7 @@ namespace AddressablesTools.Catalog
 
                     for (int i = 0; i < resourceValue.Count; i++)
                     {
-                        bucket.entries[i] = newLocations.IndexOf(resourceValue[i]);
+                        bucket.entries[i] = newLocationsToIndex[resourceValue[i]];
                     }
 
                     // write bucket
@@ -377,6 +382,13 @@ namespace AddressablesTools.Catalog
             data.m_KeyDataString = Convert.ToBase64String(keyDataStream.ToArray());
             data.m_EntryDataString = Convert.ToBase64String(entryDataStream.ToArray());
             data.m_ExtraDataString = Convert.ToBase64String(extraDataStream.ToArray());
+        }
+
+        private Dictionary<T, int> MakeDictionaryList<T>(List<T> list)
+        {
+            return list
+                .Select((item, index) => new { Item = item, Index = index })
+                .ToDictionary(x => x.Item, x => x.Index);
         }
 
         private struct Bucket

@@ -1,5 +1,6 @@
 ﻿using AddressablesTools;
 using AddressablesTools.Catalog;
+using AssetsTools.NET;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -12,7 +13,13 @@ static void SearchExample(string[] args)
         return;
     }
 
-    ContentCatalogData ccd = AddressablesJsonParser.FromString(File.ReadAllText(args[1]));
+    bool fromBundle = IsUnityFS(args[1]);
+
+    ContentCatalogData ccd;
+    if (fromBundle)
+        ccd = AddressablesJsonParser.FromBundle(args[1]);
+    else
+        ccd = AddressablesJsonParser.FromString(File.ReadAllText(args[1]));
 
     Console.Write("search key to find bundles of: ");
     string? search = Console.ReadLine();
@@ -49,6 +56,18 @@ static void SearchExample(string[] args)
     }
 }
 
+static bool IsUnityFS(string path)
+{
+    const string unityFs = "UnityFS";
+    using AssetsFileReader reader = new AssetsFileReader(path);
+    if (reader.BaseStream.Length < unityFs.Length)
+    {
+        return false;
+    }
+
+    return reader.ReadStringLength(unityFs.Length) == unityFs;
+}
+
 static void PatchCrcExample(string[] args)
 {
     if (args.Length < 2)
@@ -57,7 +76,13 @@ static void PatchCrcExample(string[] args)
         return;
     }
 
-    ContentCatalogData ccd = AddressablesJsonParser.FromString(File.ReadAllText(args[1]));
+    bool fromBundle = IsUnityFS(args[1]);
+
+    ContentCatalogData ccd;
+    if (fromBundle)
+        ccd = AddressablesJsonParser.FromBundle(args[1]);
+    else
+        ccd = AddressablesJsonParser.FromString(File.ReadAllText(args[1]));
 
     Console.WriteLine("patching...");
 
@@ -87,7 +112,11 @@ static void PatchCrcExample(string[] args)
         }
     }
 
-    File.WriteAllText(args[1] + ".patched", AddressablesJsonParser.ToJson(ccd));
+    if (fromBundle)
+        AddressablesJsonParser.ToBundle(ccd, args[1], args[1] + ".patched");
+    else
+        File.WriteAllText(args[1] + ".patched", AddressablesJsonParser.ToJson(ccd));
+
     File.Move(args[1], args[1] + ".old");
     File.Move(args[1] + ".patched", args[1]);
 }

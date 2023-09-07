@@ -5,9 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="AssetsTools.NET">
-      <HintPath>..\..\..\..\GitReposLocal\AssetsTools.NET\AssetTools.NET\bin\Debug\netstandard2.0\AssetsTools.NET.dll</HintPath>
-    </Reference>
+    <PackageReference Include="AssetsTools.NET" Version="3.0.0-preview4" />
   </ItemGroup>
 
 </Project>

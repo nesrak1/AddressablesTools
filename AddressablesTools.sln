@@ -5,7 +5,7 @@ VisualStudioVersion = 17.2.32616.157
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AddressablesTools", "AddressablesTools\AddressablesTools.csproj", "{C622872F-67B4-42D5-8035-02F3F1953A3F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Example", "Example\Example.csproj", "{B021C089-1B6A-4A5A-BB9D-2BA866445128}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Example", "Example\Example.csproj", "{B021C089-1B6A-4A5A-BB9D-2BA866445128}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
