@@ -1,9 +1,7 @@
 ﻿using AddressablesTools;
 using AddressablesTools.Catalog;
+using AddressablesTools.Classes;
 using AssetsTools.NET;
-using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 
 static void SearchExample(string[] args)
 {
@@ -17,9 +15,31 @@ static void SearchExample(string[] args)
 
     ContentCatalogData ccd;
     if (fromBundle)
-        ccd = AddressablesJsonParser.FromBundle(args[1]);
+    {
+        ccd = AddressablesCatalogFileParser.FromBundle(args[1]);
+    }
     else
-        ccd = AddressablesJsonParser.FromString(File.ReadAllText(args[1]));
+    {
+        CatalogFileType fileType;
+        using (FileStream fs = File.OpenRead(args[1]))
+        {
+            fileType = AddressablesCatalogFileParser.GetCatalogFileType(fs);
+        }
+
+        if (fileType == CatalogFileType.Json)
+        {
+            ccd = AddressablesCatalogFileParser.FromJsonString(File.ReadAllText(args[1]));
+        }
+        else if (fileType == CatalogFileType.Binary)
+        {
+            ccd = AddressablesCatalogFileParser.FromBinaryData(File.ReadAllBytes(args[1]));
+        }
+        else
+        {
+            Console.WriteLine("not a valid catalog file");
+            return;
+        }
+    }
 
     Console.Write("search key to find bundles of: ");
     string? search = Console.ReadLine();
@@ -39,15 +59,39 @@ static void SearchExample(string[] args)
             foreach (var rsrc in ccd.Resources[s])
             {
                 Console.WriteLine($" ({rsrc.ProviderId})");
-                if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.BundledAssetProvider")
+                if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
                 {
-                    List<ResourceLocation> o = ccd.Resources[rsrc.Dependency];
-                    Console.WriteLine($"  {o[0].InternalId}");
-                    if (o.Count > 1)
+                    var data = rsrc.Data;
+                    if (data is WrappedSerializedObject { Object: AssetBundleRequestOptions abro })
                     {
-                        for (int i = 1; i < o.Count; i++)
+                        uint crc = abro.Crc;
+                        Console.WriteLine($"  crc = {crc:x8}");
+                    }
+                }
+                else if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.BundledAssetProvider")
+                {
+                    List<ResourceLocation> locs;
+                    if (rsrc.Dependencies != null)
+                    {
+                        // new version
+                        locs = rsrc.Dependencies;
+                    }
+                    else if (rsrc.DependencyKey != null)
+                    {
+                        // old version
+                        locs = ccd.Resources[rsrc.DependencyKey];
+                    }
+                    else
+                    {
+                        continue;
+                    }
+
+                    Console.WriteLine($"  {locs[0].InternalId}");
+                    if (locs.Count > 1)
+                    {
+                        for (int i = 1; i < locs.Count; i++)
                         {
-                            Console.WriteLine($"    {o[i].InternalId}");
+                            Console.WriteLine($"    {locs[i].InternalId}");
                         }
                     }
                 }
@@ -80,9 +124,9 @@ static void PatchCrcExample(string[] args)
 
     ContentCatalogData ccd;
     if (fromBundle)
-        ccd = AddressablesJsonParser.FromBundle(args[1]);
+        ccd = AddressablesCatalogFileParser.FromBundle(args[1]);
     else
-        ccd = AddressablesJsonParser.FromString(File.ReadAllText(args[1]));
+        ccd = AddressablesCatalogFileParser.FromJsonString(File.ReadAllText(args[1]));
 
     Console.WriteLine("patching...");
 
@@ -93,29 +137,18 @@ static void PatchCrcExample(string[] args)
             if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
             {
                 var data = rsrc.Data;
-                if (data != null && data is ClassJsonObject classJsonObject)
+                if (data is WrappedSerializedObject { Object: AssetBundleRequestOptions abro })
                 {
-                    JsonSerializerOptions options = new JsonSerializerOptions()
-                    {
-                        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                    };
-
-                    JsonObject? jsonObj = JsonSerializer.Deserialize<JsonObject>(classJsonObject.JsonText);
-                    if (jsonObj != null)
-                    {
-                        jsonObj["m_Crc"] = 0;
-                        classJsonObject.JsonText = JsonSerializer.Serialize(jsonObj, options);
-                        rsrc.Data = classJsonObject;
-                    }
+                    abro.Crc = 0;
                 }
             }
         }
     }
 
     if (fromBundle)
-        AddressablesJsonParser.ToBundle(ccd, args[1], args[1] + ".patched");
+        AddressablesCatalogFileParser.ToBundle(ccd, args[1], args[1] + ".patched");
     else
-        File.WriteAllText(args[1] + ".patched", AddressablesJsonParser.ToJson(ccd));
+        File.WriteAllText(args[1] + ".patched", AddressablesCatalogFileParser.ToJson(ccd));
 
     File.Move(args[1], args[1] + ".old");
     File.Move(args[1] + ".patched", args[1]);

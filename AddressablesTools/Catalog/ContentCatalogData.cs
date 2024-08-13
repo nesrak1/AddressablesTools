@@ -1,4 +1,6 @@
-﻿using AddressablesTools.JSON;
+﻿using AddressablesTools.Binary;
+using AddressablesTools.JSON;
+using AddressablesTools.Reader;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,11 +11,12 @@ namespace AddressablesTools.Catalog
     public class ContentCatalogData
     {
         public string LocatorId { get; set; }
+        public string BuildResultHash { get; set; }
         public ObjectInitializationData InstanceProviderData { get; set; }
         public ObjectInitializationData SceneProviderData { get; set; }
         public ObjectInitializationData[] ResourceProviderData { get; set; }
 
-        // used for resources, shouldn't be edited directly
+        // used for resources for the json format, shouldn't be edited directly
         private string[] ProviderIds { get; set; }
         private string[] InternalIds { get; set; }
         private string[] Keys { get; set; } // for old versions
@@ -25,6 +28,7 @@ namespace AddressablesTools.Catalog
         internal void Read(ContentCatalogDataJson data)
         {
             LocatorId = data.m_LocatorId;
+            BuildResultHash = data.m_BuildResultHash;
 
             InstanceProviderData = new ObjectInitializationData();
             InstanceProviderData.Read(data.m_InstanceProviderData);
@@ -87,6 +91,31 @@ namespace AddressablesTools.Catalog
             ReadResources(data);
         }
 
+        internal void Read(CatalogBinaryReader reader)
+        {
+            ContentCatalogDataBinaryHeader header = new ContentCatalogDataBinaryHeader();
+            header.Read(reader);
+
+            LocatorId = reader.ReadEncodedString(header.IdOffset);
+            BuildResultHash = reader.ReadEncodedString(header.BuildResultHashOffset);
+
+            InstanceProviderData = new ObjectInitializationData();
+            InstanceProviderData.Read(reader, header.InstanceProviderOffset);
+
+            SceneProviderData = new ObjectInitializationData();
+            SceneProviderData.Read(reader, header.SceneProviderOffset);
+
+            uint[] resourceProviderDataOffsets = reader.ReadOffsetArray(header.InitObjectsArrayOffset);
+            ResourceProviderData = new ObjectInitializationData[resourceProviderDataOffsets.Length];
+            for (int i = 0; i < ResourceProviderData.Length; i++)
+            {
+                ResourceProviderData[i] = new ObjectInitializationData();
+                ResourceProviderData[i].Read(reader, resourceProviderDataOffsets[i]);
+            }
+
+            ReadResources(reader, header);
+        }
+
         private void ReadResources(ContentCatalogDataJson data)
         {
             List<Bucket> buckets;
@@ -123,7 +152,7 @@ namespace AddressablesTools.Catalog
                 for (int i = 0; i < keyCount; i++)
                 {
                     keyDataStream.Position = buckets[i].offset;
-                    keys.Add(SerializedObjectDecoder.Decode(keyReader));
+                    keys.Add(SerializedObjectDecoder.DecodeV1(keyReader));
                 }
             }
 
@@ -161,7 +190,7 @@ namespace AddressablesTools.Catalog
                     if (dataIndex >= 0)
                     {
                         extraDataStream.Position = dataIndex;
-                        objData = SerializedObjectDecoder.Decode(extraReader);
+                        objData = SerializedObjectDecoder.DecodeV1(extraReader);
                     }
 
                     object primaryKey;
@@ -178,7 +207,7 @@ namespace AddressablesTools.Catalog
                     SerializedType resourceType = ResourceTypes[resourceTypeIndex];
 
                     var loc = new ResourceLocation();
-                    loc.ReadCompact(internalId, providerId, dependencyKey, objData, depHash, primaryKey, resourceType);
+                    loc.Read(internalId, providerId, dependencyKey, objData, depHash, primaryKey, resourceType);
                     locations.Add(loc);
                 }
             }
@@ -196,9 +225,33 @@ namespace AddressablesTools.Catalog
             }
         }
 
+        private void ReadResources(CatalogBinaryReader reader, ContentCatalogDataBinaryHeader header)
+        {
+            uint[] keyLocationOffsets = reader.ReadOffsetArray(header.KeysOffset);
+            Resources = new Dictionary<object, List<ResourceLocation>>(keyLocationOffsets.Length / 2);
+            for (int i = 0; i < keyLocationOffsets.Length; i += 2)
+            {
+                uint keyOffset = keyLocationOffsets[i];
+                uint locationListOffset = keyLocationOffsets[i + 1];
+                object key = SerializedObjectDecoder.DecodeV2(reader, keyOffset);
+
+                uint[] locationOffsets = reader.ReadOffsetArray(locationListOffset);
+                List<ResourceLocation> locations = new List<ResourceLocation>(locationOffsets.Length);
+                for (int j = 0; j < locationOffsets.Length; j++)
+                {
+                    ResourceLocation location = new ResourceLocation();
+                    location.Read(reader, locationOffsets[j]);
+                    locations.Add(location);
+                }
+
+                Resources[key] = locations;
+            }
+        }
+
         internal void Write(ContentCatalogDataJson data)
         {
             data.m_LocatorId = LocatorId;
+            data.m_BuildResultHash = BuildResultHash;
 
             data.m_InstanceProviderData = new ObjectInitializationDataJson();
             InstanceProviderData.Write(data.m_InstanceProviderData);
@@ -279,10 +332,10 @@ namespace AddressablesTools.Catalog
                     newLocationHs.Add(location);
 
                     if (location.InternalId == null)
-                        throw new Exception("Location's internal ID cannot be null!");
+                        throw new Exception("Location's internal ID cannot be null");
 
                     if (location.ProviderId == null)
-                        throw new Exception("Location's provider ID cannot be null!");
+                        throw new Exception("Location's provider ID cannot be null");
 
                     newInternalIdHs.Add(location.InternalId);
                     newProviderIdHs.Add(location.ProviderId);
@@ -316,13 +369,13 @@ namespace AddressablesTools.Catalog
                 {
                     int internalIdIndex = newInternalIdsToIndex[location.InternalId];
                     int providerIndex = newProviderIdsToIndex[location.ProviderId];
-                    int dependencyKeyIndex = (location.Dependency == null) ? -1 : newKeyToIndex[location.Dependency];
+                    int dependencyKeyIndex = (location.DependencyKey == null) ? -1 : newKeyToIndex[location.DependencyKey];
                     int depHash = location.DependencyHashCode; // todo calculate this
                     int dataIndex = -1;
                     if (location.Data != null)
                     {
                         dataIndex = (int)extraDataStream.Position;
-                        SerializedObjectDecoder.Encode(extraWriter, location.Data);
+                        SerializedObjectDecoder.EncodeV1(extraWriter, location.Data);
                     }
                     int primaryKeyIndex = newKeyToIndex[location.PrimaryKey];
                     int resourceTypeIndex = newResourceTypesToIndex[location.Type];
@@ -357,7 +410,7 @@ namespace AddressablesTools.Catalog
                     };
 
                     // write key
-                    SerializedObjectDecoder.Encode(keyWriter, resourceKey);
+                    SerializedObjectDecoder.EncodeV1(keyWriter, resourceKey);
 
                     for (int i = 0; i < resourceValue.Count; i++)
                     {
@@ -384,7 +437,7 @@ namespace AddressablesTools.Catalog
             data.m_ExtraDataString = Convert.ToBase64String(extraDataStream.ToArray());
         }
 
-        private Dictionary<T, int> MakeDictionaryList<T>(List<T> list)
+        private static Dictionary<T, int> MakeDictionaryList<T>(List<T> list)
         {
             return list
                 .Select((item, index) => new { Item = item, Index = index })

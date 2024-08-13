@@ -1,6 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace AddressablesTools.JSON
 {
@@ -8,6 +6,8 @@ namespace AddressablesTools.JSON
     internal class ContentCatalogDataJson
     {
         public string m_LocatorId { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string m_BuildResultHash { get; set; } // ???
         public ObjectInitializationDataJson m_InstanceProviderData { get; set; }
         public ObjectInitializationDataJson m_SceneProviderData { get; set; }
         public ObjectInitializationDataJson[] m_ResourceProviderData { get; set; }
