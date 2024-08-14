@@ -282,7 +282,7 @@ namespace AddressablesTools.Catalog
                     bw.Write((byte)ObjectType.JsonObject);
                     WriteString1(bw, wso.Type.AssemblyName);
                     WriteString1(bw, wso.Type.ClassName);
-                    WriteString1(bw, jsonText);
+                    WriteString4Unicode(bw, jsonText);
                     break;
                 }
 
