@@ -1,6 +1,24 @@
 A Unityless way to read and write addressables.
 
-Work in progress. Only the latest few formats are supported at this moment.
+Work in progress.
+
+Nightly links:
+
+- https://nightly.link/nesrak1/AddressablesTools/workflows/build-windows/master/addrtool-example-windows.zip
+- https://nightly.link/nesrak1/AddressablesTools/workflows/build-ubuntu/master/addrtool-example-ubuntu.zip
+
+Supported versions:
+
+.---------------------------------------------.
+| Version      | Read support | Write support |
+|--------------|--------------|---------------|
+| Json  "v1"   | Yes          | Yes           |
+| Json  "v2"   | Yes          | Yes           |
+| Json  "v3"   | Yes          | Yes           |
+| Binv1        | Yes          | No            |
+| Binv1 "v1.1" | Yes          | No            |
+| Binv2        | Yes          | Yes           |
+`---------------------------------------------`
 
 ---
 
