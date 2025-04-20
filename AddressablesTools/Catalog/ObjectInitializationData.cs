@@ -1,5 +1,7 @@
-﻿using AddressablesTools.JSON;
-using AddressablesTools.Reader;
+﻿using AddressablesTools.Binary;
+using AddressablesTools.JSON;
+using System;
+using System.Buffers.Binary;
 
 namespace AddressablesTools.Catalog
 {
@@ -37,6 +39,15 @@ namespace AddressablesTools.Catalog
             obj.m_ObjectType = new SerializedTypeJson();
             ObjectType.Write(obj.m_ObjectType);
             obj.m_Data = Data;
+        }
+
+        internal uint Write(CatalogBinaryWriter writer)
+        {
+            Span<byte> bytes = stackalloc byte[12];
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes, writer.WriteEncodedString(Id));
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes[4..], ObjectType.Write(writer));
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes[8..], writer.WriteEncodedString(Data));
+            return writer.WriteWithCache(bytes);
         }
     }
 }

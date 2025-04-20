@@ -1,6 +1,6 @@
-﻿using AddressablesTools.Catalog;
+﻿using AddressablesTools.Binary;
+using AddressablesTools.Catalog;
 using AddressablesTools.JSON;
-using AddressablesTools.Reader;
 using AssetsTools.NET;
 using AssetsTools.NET.Extra;
 using System;
@@ -150,7 +150,17 @@ namespace AddressablesTools
             return FromBundle(manager, bundleInst);
         }
 
-        public static string ToJson(ContentCatalogData ccd)
+        public static byte[] ToBinaryData(ContentCatalogData ccd)
+        {
+            using MemoryStream ms = new MemoryStream();
+            using CatalogBinaryWriter writer = new CatalogBinaryWriter(ms);
+
+            ccd.Write(writer, SerializedTypeAsmContainer.ForNet40());
+
+            return ms.ToArray();
+        }
+
+        public static string ToJsonString(ContentCatalogData ccd)
         {
             ContentCatalogDataJson ccdJson = new ContentCatalogDataJson();
 
@@ -165,7 +175,7 @@ namespace AddressablesTools
 
         internal static void ToBundle(ContentCatalogData ccd, AssetsManager manager, BundleFileInstance bundleInst, Stream stream)
         {
-            string json = ToJson(ccd);
+            string json = ToJsonString(ccd);
 
             // there should only be one file in this bundle, so 0 is fine
             AssetsFileInstance assetsInst = manager.LoadAssetsFileFromBundle(bundleInst, 0);

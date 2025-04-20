@@ -1,6 +1,5 @@
 ﻿using AddressablesTools.Binary;
 using AddressablesTools.JSON;
-using AddressablesTools.Reader;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -21,7 +20,7 @@ namespace AddressablesTools.Catalog
         private string[] InternalIds { get; set; }
         private string[] Keys { get; set; } // for old versions
         private SerializedType[] ResourceTypes { get; set; }
-        private string[] InternalIdPrefixes { get; set; } // todo
+        private string[] InternalIdPrefixes { get; set; }
 
         public Dictionary<object, List<ResourceLocation>> Resources { get; set; }
 
@@ -177,6 +176,12 @@ namespace AddressablesTools.Catalog
                     int resourceTypeIndex = entryReader.ReadInt32();
 
                     string internalId = InternalIds[internalIdIndex];
+                    int splitIndex = internalId.LastIndexOf('#');
+                    if (splitIndex != -1)
+                    {
+                        int prefixIndex = int.Parse(internalId[..splitIndex]);
+                        internalId = string.Concat(InternalIdPrefixes[prefixIndex], internalId.AsSpan(splitIndex + 1));
+                    }
 
                     string providerId = ProviderIds[providerIndex];
 
@@ -274,10 +279,20 @@ namespace AddressablesTools.Catalog
                 data.m_ProviderIds[i] = ProviderIds[i];
             }
 
+            Dictionary<string, int> newPrefixesToIndex = MakeDictionaryList(InternalIdPrefixes.ToList());
             data.m_InternalIds = new string[InternalIds.Length];
             for (int i = 0; i < data.m_InternalIds.Length; i++)
             {
-                data.m_InternalIds[i] = InternalIds[i];
+                int splitIndex = InternalIds[i].LastIndexOf('/');
+                if (splitIndex != -1)
+                {
+                    int prefixIndex = newPrefixesToIndex[InternalIds[i][..splitIndex]];
+                    data.m_InternalIds[i] = $"{prefixIndex}#{InternalIds[i][splitIndex..]}";
+                }
+                else
+                {
+                    data.m_InternalIds[i] = InternalIds[i];
+                }
             }
 
             if (Keys != null)
@@ -314,12 +329,79 @@ namespace AddressablesTools.Catalog
             }
         }
 
+        internal void Write(CatalogBinaryWriter writer, SerializedTypeAsmContainer staCont)
+        {
+            if (writer.Version == 1)
+            {
+                throw new NotSupportedException("Only version 2 catalogs are supported for writing so far.");
+            }
+
+            ContentCatalogDataBinaryHeader header = new ContentCatalogDataBinaryHeader();
+            header.Write(writer); // empty header
+
+            header.Magic = 0x0de38942;
+            header.Version = 2;
+            header.KeysOffset = (uint)writer.BaseStream.Position + 4;
+            writer.Reserve(4 + Resources.Count * 4 * 2); // empty key list + length
+
+            header.IdOffset = writer.WriteEncodedString(LocatorId);
+            header.InstanceProviderOffset = InstanceProviderData.Write(writer);
+            header.SceneProviderOffset = SceneProviderData.Write(writer);
+
+            uint[] initObjectsOffsets = new uint[ResourceProviderData.Length];
+            for (int i = 0; i < ResourceProviderData.Length; i++)
+            {
+                initObjectsOffsets[i] = ResourceProviderData[i].Write(writer);
+            }
+
+            header.InitObjectsArrayOffset = writer.WriteOffsetArray(initObjectsOffsets);
+            header.BuildResultHashOffset = writer.WriteEncodedString(BuildResultHash);
+
+            WriteResources(writer, header, staCont);
+
+            writer.BaseStream.Position = 0;
+            header.Write(writer);
+        }
+
+        private void WriteResources(CatalogBinaryWriter writer, ContentCatalogDataBinaryHeader header, SerializedTypeAsmContainer staCont)
+        {
+            List<uint[]> tmpLocationOffsetArray = new List<uint[]>();
+            uint[] keyLocationOffsets = new uint[Resources.Count * 2];
+            foreach (var kvp in Resources)
+            {
+                // resource locations are written first
+                uint[] locationOffsets = new uint[kvp.Value.Count];
+                for (int j = 0; j < kvp.Value.Count; j++)
+                {
+                    ResourceLocation location = kvp.Value[j];
+                    locationOffsets[j] = location.Write(writer, staCont);
+                }
+
+                tmpLocationOffsetArray.Add(locationOffsets);
+            }
+
+            int i = 0;
+            int i2 = 0;
+            foreach (var kvp in Resources)
+            {
+                uint keyOffset = SerializedObjectDecoder.EncodeV2(writer, staCont, kvp.Key);
+                keyLocationOffsets[i++] = keyOffset;
+
+                uint locationListOffset = writer.WriteOffsetArray(tmpLocationOffsetArray[i2++]);
+                keyLocationOffsets[i++] = locationListOffset;
+            }
+
+            // don't write with cache since we already reserved space for it
+            writer.BaseStream.Position = header.KeysOffset - 4;
+            header.KeysOffset = writer.WriteOffsetArray(keyLocationOffsets, false);
+        }
+
         private void WriteResources(ContentCatalogDataJson data)
         {
             HashSet<string> newInternalIdHs = new HashSet<string>();
             HashSet<string> newProviderIdHs = new HashSet<string>();
             HashSet<SerializedType> newResourceTypeHs = new HashSet<SerializedType>();
-            //HashSet<string> newInternalIdPrefixes = new HashSet<string>(); // todo
+            HashSet<string> newInternalIdPrefixes = new HashSet<string>();
 
             HashSet<ResourceLocation> newLocationHs = new HashSet<ResourceLocation>();
 
@@ -336,6 +418,12 @@ namespace AddressablesTools.Catalog
 
                     if (location.ProviderId == null)
                         throw new Exception("Location's provider ID cannot be null");
+
+                    int splitIndex = location.InternalId.LastIndexOf('/');
+                    if (splitIndex != -1)
+                    {
+                        newInternalIdPrefixes.Add(location.InternalId[..splitIndex]);
+                    }
 
                     newInternalIdHs.Add(location.InternalId);
                     newProviderIdHs.Add(location.ProviderId);
@@ -429,6 +517,7 @@ namespace AddressablesTools.Catalog
 
             ProviderIds = newProviderIds.ToArray();
             InternalIds = newInternalIds.ToArray();
+            InternalIdPrefixes = newInternalIdPrefixes.ToArray();
             ResourceTypes = newResourceTypes.ToArray();
 
             data.m_BucketDataString = Convert.ToBase64String(bucketStream.ToArray());

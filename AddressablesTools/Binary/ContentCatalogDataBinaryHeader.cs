@@ -1,5 +1,4 @@
-﻿using AddressablesTools.Reader;
-using System;
+﻿using System;
 
 namespace AddressablesTools.Binary
 {
@@ -18,17 +17,37 @@ namespace AddressablesTools.Binary
         {
             Magic = reader.ReadInt32();
             Version = reader.ReadInt32();
-            if (Version != 2)
+            if (Version is not (1 or 2))
             {
-                throw new NotSupportedException("Only version 2 is supported");
+                throw new NotSupportedException("Only versions 1 and 2 are supported");
             }
+            reader.Version = Version;
 
             KeysOffset = reader.ReadUInt32();
             IdOffset = reader.ReadUInt32();
             InstanceProviderOffset = reader.ReadUInt32();
             SceneProviderOffset = reader.ReadUInt32();
             InitObjectsArrayOffset = reader.ReadUInt32();
-            BuildResultHashOffset = reader.ReadUInt32();
+
+            // version 1 has at least two sub versions:
+            // 1.21.18 does not have this member, so we ignore it
+            if (Version == 1 && KeysOffset == 0x20)
+                BuildResultHashOffset = uint.MaxValue;
+            else
+                BuildResultHashOffset = reader.ReadUInt32();
+        }
+
+        internal void Write(CatalogBinaryWriter writer)
+        {
+            writer.Write(Magic);
+            writer.Write(Version);
+            writer.Write(KeysOffset);
+            writer.Write(IdOffset);
+            writer.Write(InstanceProviderOffset);
+            writer.Write(SceneProviderOffset);
+            writer.Write(InitObjectsArrayOffset);
+            if (BuildResultHashOffset != uint.MaxValue)
+                writer.Write(BuildResultHashOffset);
         }
     }
 }

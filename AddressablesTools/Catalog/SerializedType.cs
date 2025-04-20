@@ -1,6 +1,7 @@
-﻿using AddressablesTools.JSON;
-using AddressablesTools.Reader;
+﻿using AddressablesTools.Binary;
+using AddressablesTools.JSON;
 using System;
+using System.Buffers.Binary;
 using System.IO;
 
 namespace AddressablesTools.Catalog
@@ -43,6 +44,14 @@ namespace AddressablesTools.Catalog
         {
             type.m_AssemblyName = AssemblyName;
             type.m_ClassName = ClassName;
+        }
+
+        internal uint Write(CatalogBinaryWriter writer)
+        {
+            Span<byte> bytes = stackalloc byte[8];
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes, writer.WriteEncodedString(AssemblyName, '.'));
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes[4..], writer.WriteEncodedString(ClassName, '.'));
+            return writer.WriteWithCache(bytes);
         }
 
         internal string GetMatchName()

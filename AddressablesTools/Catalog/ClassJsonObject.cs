@@ -7,7 +7,7 @@
 
         public ClassJsonObject(string assemblyName, string className, string jsonText)
         {
-            Type = new SerializedType()
+            Type = new SerializedType
             {
                 AssemblyName = assemblyName,
                 ClassName = className,

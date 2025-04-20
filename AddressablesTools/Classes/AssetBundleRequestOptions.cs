@@ -1,4 +1,6 @@
-﻿using AddressablesTools.Reader;
+﻿using AddressablesTools.Binary;
+using System;
+using System.Buffers.Binary;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -15,16 +17,9 @@ namespace AddressablesTools.Classes
     {
         public string Hash { get; set; }
         public uint Crc { get; set; }
-        public int Timeout { get; set; }
-        public bool ChunkedTransfer { get; set; }
-        public int RedirectLimit { get; set; }
-        public int RetryCount { get; set; }
+        public CommonInfo ComInfo { get; set; }
         public string BundleName { get; set; }
-        public AssetLoadMode AssetLoadMode { get; set; }
         public long BundleSize { get; set; }
-        public bool UseCrcForCachedBundle { get; set; }
-        public bool UseUnityWebRequestForLocalBundles { get; set; }
-        public bool ClearOtherCachedVersionsWhenLoaded { get; set; }
 
         internal void Read(string jsonText)
         {
@@ -36,16 +31,39 @@ namespace AddressablesTools.Classes
 
             Hash = (string)jsonObj["m_Hash"];
             Crc = (uint)jsonObj["m_Crc"];
-            Timeout = (int)jsonObj["m_Timeout"];
-            ChunkedTransfer = (bool)jsonObj["m_ChunkedTransfer"];
-            RedirectLimit = (int)jsonObj["m_RedirectLimit"];
-            RetryCount = (int)jsonObj["m_RetryCount"];
             BundleName = (string)jsonObj["m_BundleName"];
-            AssetLoadMode = (AssetLoadMode)(int)jsonObj["m_AssetLoadMode"];
             BundleSize = (long)jsonObj["m_BundleSize"];
-            UseCrcForCachedBundle = (bool)jsonObj["m_UseCrcForCachedBundles"]; // not a typo
-            UseUnityWebRequestForLocalBundles = (bool)jsonObj["m_UseUWRForLocalBundles"];
-            ClearOtherCachedVersionsWhenLoaded = (bool)jsonObj["m_ClearOtherCachedVersionsWhenLoaded"];
+
+            // this is only for writing back
+            int commonInfoVersion;
+            if (jsonObj["m_ChunkedTransfer"] == null)
+            {
+                commonInfoVersion = 1;
+            }
+            else if (jsonObj["m_AssetLoadMode"] == null &&
+                     jsonObj["m_UseCrcForCachedBundles"] == null &&
+                     jsonObj["m_UseUWRForLocalBundles"] == null &&
+                     jsonObj["m_ClearOtherCachedVersionsWhenLoaded"] == null)
+            {
+                commonInfoVersion = 2;
+            }
+            else
+            {
+                commonInfoVersion = 3;
+            }
+
+            ComInfo = new CommonInfo()
+            {
+                Version = commonInfoVersion,
+                Timeout = (short)(int)jsonObj["m_Timeout"],
+                ChunkedTransfer = (bool)(jsonObj["m_ChunkedTransfer"] ?? false),
+                RedirectLimit = (byte)(int)jsonObj["m_RedirectLimit"],
+                RetryCount = (byte)(int)jsonObj["m_RetryCount"],
+                AssetLoadMode = (AssetLoadMode)(int)(jsonObj["m_AssetLoadMode"] ?? (int)AssetLoadMode.RequestedAssetAndDependencies),
+                UseCrcForCachedBundle = (bool)(jsonObj["m_UseCrcForCachedBundles"] ?? false),
+                UseUnityWebRequestForLocalBundles = (bool)(jsonObj["m_UseUWRForLocalBundles"] ?? false),
+                ClearOtherCachedVersionsWhenLoaded = (bool)(jsonObj["m_ClearOtherCachedVersionsWhenLoaded"] ?? false),
+            };
         }
 
         internal void Read(CatalogBinaryReader reader, uint offset)
@@ -70,17 +88,11 @@ namespace AddressablesTools.Classes
             BundleSize = bundleSize;
 
             // split in another class in case we need to do writing with duplicates later
-            CommonInfo commonInfo = new CommonInfo();
-            commonInfo.Read(reader, commonInfoOffset);
-
-            Timeout = commonInfo.Timeout;
-            RedirectLimit = commonInfo.RedirectLimit;
-            RetryCount = commonInfo.RetryCount;
-            AssetLoadMode = commonInfo.AssetLoadMode;
-            ChunkedTransfer = commonInfo.ChunkedTransfer;
-            UseCrcForCachedBundle = commonInfo.UseCrcForCachedBundle;
-            UseUnityWebRequestForLocalBundles = commonInfo.UseUnityWebRequestForLocalBundles;
-            ClearOtherCachedVersionsWhenLoaded = commonInfo.ClearOtherCachedVersionsWhenLoaded;
+            ComInfo = new CommonInfo()
+            {
+                Version = 3
+            };
+            ComInfo.Read(reader, commonInfoOffset);
         }
 
         internal string WriteJson()
@@ -92,21 +104,43 @@ namespace AddressablesTools.Classes
 
             JsonObject jsonObj = new JsonObject();
 
-            // how many of these properties existed during v1?
             jsonObj["m_Hash"] = Hash;
             jsonObj["m_Crc"] = Crc;
-            jsonObj["m_Timeout"] = Timeout;
-            jsonObj["m_ChunkedTransfer"] = ChunkedTransfer;
-            jsonObj["m_RedirectLimit"] = RedirectLimit;
-            jsonObj["m_RetryCount"] = RetryCount;
+            jsonObj["m_Timeout"] = ComInfo.Timeout;
+            jsonObj["m_RedirectLimit"] = ComInfo.RedirectLimit;
+            jsonObj["m_RetryCount"] = ComInfo.RetryCount;
             jsonObj["m_BundleName"] = BundleName;
-            jsonObj["m_AssetLoadMode"] = (int)AssetLoadMode;
             jsonObj["m_BundleSize"] = BundleSize;
-            jsonObj["m_UseCrcForCachedBundles"] = UseCrcForCachedBundle; // not a typo
-            jsonObj["m_UseUWRForLocalBundles"] = UseUnityWebRequestForLocalBundles;
-            jsonObj["m_ClearOtherCachedVersionsWhenLoaded"] = ClearOtherCachedVersionsWhenLoaded;
+            if (ComInfo.Version > 1)
+            {
+                jsonObj["m_ChunkedTransfer"] = ComInfo.ChunkedTransfer;
+            }
+            if (ComInfo.Version > 2)
+            {
+                jsonObj["m_AssetLoadMode"] = (int)ComInfo.AssetLoadMode;
+                jsonObj["m_UseCrcForCachedBundles"] = ComInfo.UseCrcForCachedBundle; // not a typo
+                jsonObj["m_UseUWRForLocalBundles"] = ComInfo.UseUnityWebRequestForLocalBundles;
+                jsonObj["m_ClearOtherCachedVersionsWhenLoaded"] = ComInfo.ClearOtherCachedVersionsWhenLoaded;
+            }
 
             return JsonSerializer.Serialize(jsonObj, options);
+        }
+
+        internal uint WriteBinary(CatalogBinaryWriter writer)
+        {
+            uint hashOffset = new Hash128(Hash).Write(writer);
+            uint bundleNameOffset = writer.WriteEncodedString(BundleName, '_');
+            uint crc = Crc;
+            uint bundleSize = (uint)BundleSize;
+            uint commonInfoOffset = ComInfo.Write(writer);
+
+            Span<byte> bytes = stackalloc byte[20];
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes, hashOffset);
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes[4..], bundleNameOffset);
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes[8..], crc);
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes[12..], bundleSize);
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes[16..], commonInfoOffset);
+            return writer.WriteWithCache(bytes);
         }
 
         public class CommonInfo
@@ -119,6 +153,14 @@ namespace AddressablesTools.Classes
             public bool UseCrcForCachedBundle { get; set; }
             public bool UseUnityWebRequestForLocalBundles { get; set; }
             public bool ClearOtherCachedVersionsWhenLoaded { get; set; }
+
+            // this is not a real field, but this helps us know which fields to write back
+            // version 1 (json) = don't write AssetLoadMode, UseCrcForCachedBundle, UseUnityWebRequestForLocalBundles,
+            //                                ClearOtherCachedVersionsWhenLoaded, ChunkedTransfer
+            // version 2 (json) = don't write AssetLoadMode, UseCrcForCachedBundle, UseUnityWebRequestForLocalBundles,
+            //                                ClearOtherCachedVersionsWhenLoaded
+            // version 3 (json + binary) = write all fields
+            public int Version { get; init; }
 
             internal void Read(CatalogBinaryReader reader, uint offset)
             {
@@ -135,17 +177,34 @@ namespace AddressablesTools.Classes
 
                 if ((flags & 1) != 0)
                 {
-                    AssetLoadMode = AssetLoadMode.RequestedAssetAndDependencies;
+                    AssetLoadMode = AssetLoadMode.AllPackedAssetsAndDependencies;
                 }
                 else
                 {
-                    AssetLoadMode = AssetLoadMode.AllPackedAssetsAndDependencies;
+                    AssetLoadMode = AssetLoadMode.RequestedAssetAndDependencies;
                 }
 
                 ChunkedTransfer = (flags & 2) != 0;
                 UseCrcForCachedBundle = (flags & 4) != 0;
                 UseUnityWebRequestForLocalBundles = (flags & 8) != 0;
                 ClearOtherCachedVersionsWhenLoaded = (flags & 16) != 0;
+            }
+
+            internal uint Write(CatalogBinaryWriter writer)
+            {
+                int flags = 0;
+                flags |= ((int)AssetLoadMode) & 1;
+                flags |= (ChunkedTransfer ? 1 : 0) << 1;
+                flags |= (UseCrcForCachedBundle ? 1 : 0) << 2;
+                flags |= (UseUnityWebRequestForLocalBundles ? 1 : 0) << 3;
+                flags |= (ClearOtherCachedVersionsWhenLoaded ? 1 : 0) << 4;
+
+                Span<byte> data = stackalloc byte[8];
+                BinaryPrimitives.WriteInt16LittleEndian(data, Timeout);
+                data[2] = RedirectLimit;
+                data[3] = RetryCount;
+                BinaryPrimitives.WriteInt32LittleEndian(data[4..], flags);
+                return writer.WriteWithCache(data);
             }
         }
     }

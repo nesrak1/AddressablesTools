@@ -50,15 +50,15 @@ static void SearchExample(string[] args)
     }
 
     search = search.ToLower();
-
     foreach (object k in ccd.Resources.Keys)
     {
         if (k is string s && s.ToLower().Contains(search))
         {
             Console.Write(s);
-            foreach (var rsrc in ccd.Resources[s])
+            var rsrcs = ccd.Resources[s];
+            foreach (var rsrc in rsrcs)
             {
-                Console.WriteLine($" ({rsrc.ProviderId})");
+                Console.WriteLine($" (id: {rsrc.InternalId}, prov: {rsrc.ProviderId})");
                 if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
                 {
                     var data = rsrc.Data;
@@ -112,6 +112,25 @@ static bool IsUnityFS(string path)
     return reader.ReadStringLength(unityFs.Length) == unityFs;
 }
 
+static void PatchCrcRecursive(ResourceLocation thisRsrc, HashSet<ResourceLocation> seenRsrcs)
+{
+    // I think this can't happen right now, resources are duplicated every time
+    if (seenRsrcs.Contains(thisRsrc))
+        return;
+
+    var data = thisRsrc.Data;
+    if (data is WrappedSerializedObject { Object: AssetBundleRequestOptions abro })
+    {
+        abro.Crc = 0;
+    }
+
+    seenRsrcs.Add(thisRsrc);
+    foreach (var childRsrc in thisRsrc.Dependencies)
+    {
+        PatchCrcRecursive(childRsrc, seenRsrcs);
+    }
+}
+
 static void PatchCrcExample(string[] args)
 {
     if (args.Length < 2)
@@ -123,19 +142,48 @@ static void PatchCrcExample(string[] args)
     bool fromBundle = IsUnityFS(args[1]);
 
     ContentCatalogData ccd;
+    CatalogFileType fileType = CatalogFileType.None;
     if (fromBundle)
+    {
         ccd = AddressablesCatalogFileParser.FromBundle(args[1]);
+    }
     else
-        ccd = AddressablesCatalogFileParser.FromJsonString(File.ReadAllText(args[1]));
+    {
+        using (FileStream fs = File.OpenRead(args[1]))
+        {
+            fileType = AddressablesCatalogFileParser.GetCatalogFileType(fs);
+        }
+
+        switch (fileType)
+        {
+            case CatalogFileType.Json:
+                ccd = AddressablesCatalogFileParser.FromJsonString(File.ReadAllText(args[1]));
+                break;
+            case CatalogFileType.Binary:
+                ccd = AddressablesCatalogFileParser.FromBinaryData(File.ReadAllBytes(args[1]));
+                break;
+            default:
+                Console.WriteLine("not a valid catalog file");
+                return;
+        }
+    }
 
     Console.WriteLine("patching...");
 
+    var seenRsrcs = new HashSet<ResourceLocation>();
     foreach (var resourceList in ccd.Resources.Values)
     {
         foreach (var rsrc in resourceList)
         {
+            if (rsrc.Dependencies != null)
+            {
+                // we just spotted a new version entry, switch to new entry parsing
+                PatchCrcRecursive(rsrc, seenRsrcs);
+            }
+
             if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
             {
+                // old version
                 var data = rsrc.Data;
                 if (data is WrappedSerializedObject { Object: AssetBundleRequestOptions abro })
                 {
@@ -146,12 +194,26 @@ static void PatchCrcExample(string[] args)
     }
 
     if (fromBundle)
+    {
         AddressablesCatalogFileParser.ToBundle(ccd, args[1], args[1] + ".patched");
+    }
     else
-        File.WriteAllText(args[1] + ".patched", AddressablesCatalogFileParser.ToJson(ccd));
+    {
+        switch (fileType)
+        {
+            case CatalogFileType.Json:
+                File.WriteAllText(args[1] + ".patched", AddressablesCatalogFileParser.ToJsonString(ccd));
+                break;
+            case CatalogFileType.Binary:
+                File.WriteAllBytes(args[1] + ".patched", AddressablesCatalogFileParser.ToBinaryData(ccd));
+                break;
+            default:
+                return;
+        }
+    }
 
-    File.Move(args[1], args[1] + ".old");
-    File.Move(args[1] + ".patched", args[1]);
+    File.Move(args[1], args[1] + ".old", true);
+    File.Move(args[1] + ".patched", args[1], true);
 }
 
 if (args.Length < 1)
