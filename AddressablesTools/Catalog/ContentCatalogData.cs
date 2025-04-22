@@ -176,7 +176,7 @@ namespace AddressablesTools.Catalog
                     int resourceTypeIndex = entryReader.ReadInt32();
 
                     string internalId = InternalIds[internalIdIndex];
-                    int splitIndex = internalId.LastIndexOf('#');
+                    int splitIndex = internalId.IndexOf('#');
                     if (splitIndex != -1)
                     {
                         int prefixIndex = int.Parse(internalId[..splitIndex]);
