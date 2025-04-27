@@ -57,10 +57,7 @@ namespace AddressablesTools.Binary
                 long partStringOffset = ReadUInt32();
                 long nextPartOffset = ReadUInt32();
 
-                if (Version > 1)
-                    partStrs.Add(ReadBasicString(partStringOffset, unicode));
-                else
-                    partStrs.Add(ReadEncodedString((uint)partStringOffset)); // which seperator?
+                partStrs.Add(ReadEncodedString((uint)partStringOffset)); // which seperator?
 
                 if (nextPartOffset == uint.MaxValue)
                 {

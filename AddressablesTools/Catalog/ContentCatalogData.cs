@@ -9,6 +9,9 @@ namespace AddressablesTools.Catalog
 {
     public class ContentCatalogData
     {
+        // only used for binary format
+        public int Version { get; set; }
+
         public string LocatorId { get; set; }
         public string BuildResultHash { get; set; }
         public ObjectInitializationData InstanceProviderData { get; set; }
@@ -94,6 +97,8 @@ namespace AddressablesTools.Catalog
         {
             ContentCatalogDataBinaryHeader header = new ContentCatalogDataBinaryHeader();
             header.Read(reader);
+
+            Version = reader.Version;
 
             LocatorId = reader.ReadEncodedString(header.IdOffset);
             BuildResultHash = reader.ReadEncodedString(header.BuildResultHashOffset);
@@ -331,10 +336,12 @@ namespace AddressablesTools.Catalog
 
         internal void Write(CatalogBinaryWriter writer, SerializedTypeAsmContainer staCont)
         {
-            if (writer.Version == 1)
+            if (Version == 1)
             {
                 throw new NotSupportedException("Only version 2 catalogs are supported for writing so far.");
             }
+
+            writer.Version = Version;
 
             ContentCatalogDataBinaryHeader header = new ContentCatalogDataBinaryHeader();
             header.Write(writer); // empty header

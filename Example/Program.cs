@@ -179,6 +179,7 @@ static void PatchCrcExample(string[] args)
             {
                 // we just spotted a new version entry, switch to new entry parsing
                 PatchCrcRecursive(rsrc, seenRsrcs);
+                continue;
             }
 
             if (rsrc.ProviderId == "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider")
