@@ -135,21 +135,27 @@ static void PatchCrcExample(string[] args)
 {
     if (args.Length < 2)
     {
-        Console.WriteLine("need path to catalog.json");
+        Console.WriteLine("Need path to catalog.json");
+        return;
+    }
+    string catalogPath = args[1];
+    if (!File.Exists(catalogPath))
+    {
+        Console.WriteLine($"File not found: {catalogPath}");
         return;
     }
 
-    bool fromBundle = IsUnityFS(args[1]);
+    bool fromBundle = IsUnityFS(catalogPath);
 
     ContentCatalogData ccd;
     CatalogFileType fileType = CatalogFileType.None;
     if (fromBundle)
     {
-        ccd = AddressablesCatalogFileParser.FromBundle(args[1]);
+        ccd = AddressablesCatalogFileParser.FromBundle(catalogPath);
     }
     else
     {
-        using (FileStream fs = File.OpenRead(args[1]))
+        using (FileStream fs = File.OpenRead(catalogPath))
         {
             fileType = AddressablesCatalogFileParser.GetCatalogFileType(fs);
         }
@@ -157,18 +163,18 @@ static void PatchCrcExample(string[] args)
         switch (fileType)
         {
             case CatalogFileType.Json:
-                ccd = AddressablesCatalogFileParser.FromJsonString(File.ReadAllText(args[1]));
+                ccd = AddressablesCatalogFileParser.FromJsonString(File.ReadAllText(catalogPath));
                 break;
             case CatalogFileType.Binary:
-                ccd = AddressablesCatalogFileParser.FromBinaryData(File.ReadAllBytes(args[1]));
+                ccd = AddressablesCatalogFileParser.FromBinaryData(File.ReadAllBytes(catalogPath));
                 break;
             default:
-                Console.WriteLine("not a valid catalog file");
+                Console.WriteLine("Not a valid catalog file");
                 return;
         }
     }
 
-    Console.WriteLine("patching...");
+    Console.WriteLine("Patching...");
 
     var seenRsrcs = new HashSet<ResourceLocation>();
     foreach (var resourceList in ccd.Resources.Values)
@@ -196,25 +202,26 @@ static void PatchCrcExample(string[] args)
 
     if (fromBundle)
     {
-        AddressablesCatalogFileParser.ToBundle(ccd, args[1], args[1] + ".patched");
+        AddressablesCatalogFileParser.ToBundle(ccd, catalogPath, catalogPath + ".patched");
     }
     else
     {
         switch (fileType)
         {
             case CatalogFileType.Json:
-                File.WriteAllText(args[1] + ".patched", AddressablesCatalogFileParser.ToJsonString(ccd));
+                File.WriteAllText(catalogPath + ".patched", AddressablesCatalogFileParser.ToJsonString(ccd));
                 break;
             case CatalogFileType.Binary:
-                File.WriteAllBytes(args[1] + ".patched", AddressablesCatalogFileParser.ToBinaryData(ccd));
+                File.WriteAllBytes(catalogPath + ".patched", AddressablesCatalogFileParser.ToBinaryData(ccd));
                 break;
             default:
                 return;
         }
     }
 
-    File.Move(args[1], args[1] + ".old", true);
-    File.Move(args[1] + ".patched", args[1], true);
+    File.Move(catalogPath, catalogPath + ".old", true);
+    File.Move(catalogPath + ".patched", catalogPath, true);
+    Console.WriteLine("Successful patched!");
 }
 
 if (args.Length < 1)
@@ -232,5 +239,5 @@ else if (args[0] == "patchcrc")
 }
 else
 {
-    Console.WriteLine("mode not supported");
+    Console.WriteLine("Mode not supported");
 }
