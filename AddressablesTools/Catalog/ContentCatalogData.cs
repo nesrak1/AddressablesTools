@@ -17,6 +17,7 @@ namespace AddressablesTools.Catalog
         public ObjectInitializationData InstanceProviderData { get; set; }
         public ObjectInitializationData SceneProviderData { get; set; }
         public ObjectInitializationData[] ResourceProviderData { get; set; }
+        public bool WriteCompact { get; set; } // use prefixes when writing?
 
         // used for resources for the json format, shouldn't be edited directly
         private string[] ProviderIds { get; set; }
@@ -84,10 +85,13 @@ namespace AddressablesTools.Catalog
                 {
                     InternalIdPrefixes[i] = data.m_InternalIdPrefixes[i];
                 }
+
+                WriteCompact = InternalIdPrefixes.Length > 0;
             }
             else
             {
                 InternalIdPrefixes = null;
+                WriteCompact = false;
             }
 
             ReadResources(data);
@@ -181,11 +185,17 @@ namespace AddressablesTools.Catalog
                     int resourceTypeIndex = entryReader.ReadInt32();
 
                     string internalId = InternalIds[internalIdIndex];
-                    int splitIndex = internalId.IndexOf('#');
-                    if (splitIndex != -1)
+                    if (InternalIdPrefixes != null && InternalIdPrefixes.Length > 0)
                     {
-                        int prefixIndex = int.Parse(internalId[..splitIndex]);
-                        internalId = string.Concat(InternalIdPrefixes[prefixIndex], internalId.AsSpan(splitIndex + 1));
+                        // the real code uses LastIndexOf, but this completely breaks if
+                        // a string has a # in it already (e.g., #12/some/path/thathas#init.prefab)
+                        // this does not technically meet the reference behavior,
+                        // but as this is the _expected_ behavior, we'll use that instead.
+                        int splitIndex = internalId.IndexOf('#');
+                        if (splitIndex != -1 && int.TryParse(internalId[..splitIndex], out int prefixIndex))
+                        {
+                            internalId = string.Concat(InternalIdPrefixes[prefixIndex], internalId.AsSpan(splitIndex + 1));
+                        }
                     }
 
                     string providerId = ProviderIds[providerIndex];
@@ -284,17 +294,29 @@ namespace AddressablesTools.Catalog
                 data.m_ProviderIds[i] = ProviderIds[i];
             }
 
-            Dictionary<string, int> newPrefixesToIndex = MakeDictionaryList(InternalIdPrefixes.ToList());
             data.m_InternalIds = new string[InternalIds.Length];
-            for (int i = 0; i < data.m_InternalIds.Length; i++)
+            if (InternalIdPrefixes != null && InternalIdPrefixes.Length > 0 && WriteCompact)
             {
-                int splitIndex = InternalIds[i].LastIndexOf('/');
-                if (splitIndex != -1)
+                Dictionary<string, int> newPrefixesToIndex = MakeDictionaryList(InternalIdPrefixes.ToList());
+                for (int i = 0; i < data.m_InternalIds.Length; i++)
                 {
-                    int prefixIndex = newPrefixesToIndex[InternalIds[i][..splitIndex]];
-                    data.m_InternalIds[i] = $"{prefixIndex}#{InternalIds[i][splitIndex..]}";
+                    string internalId = InternalIds[i];
+                    int splitIndex = internalId.LastIndexOf('/');
+                    // skip if # in string since this seems broken in addressables' implementation
+                    if (splitIndex != -1 && !internalId.Contains('#'))
+                    {
+                        int prefixIndex = newPrefixesToIndex[internalId[..splitIndex]];
+                        data.m_InternalIds[i] = $"{prefixIndex}#{internalId[splitIndex..]}";
+                    }
+                    else
+                    {
+                        data.m_InternalIds[i] = InternalIds[i];
+                    }
                 }
-                else
+            }
+            else
+            {
+                for (int i = 0; i < data.m_InternalIds.Length; i++)
                 {
                     data.m_InternalIds[i] = InternalIds[i];
                 }
@@ -426,10 +448,13 @@ namespace AddressablesTools.Catalog
                     if (location.ProviderId == null)
                         throw new Exception("Location's provider ID cannot be null");
 
-                    int splitIndex = location.InternalId.LastIndexOf('/');
-                    if (splitIndex != -1)
+                    if (InternalIdPrefixes != null && WriteCompact)
                     {
-                        newInternalIdPrefixes.Add(location.InternalId[..splitIndex]);
+                        int splitIndex = location.InternalId.LastIndexOf('/');
+                        if (splitIndex != -1)
+                        {
+                            newInternalIdPrefixes.Add(location.InternalId[..splitIndex]);
+                        }
                     }
 
                     newInternalIdHs.Add(location.InternalId);
@@ -524,7 +549,13 @@ namespace AddressablesTools.Catalog
 
             ProviderIds = newProviderIds.ToArray();
             InternalIds = newInternalIds.ToArray();
-            InternalIdPrefixes = newInternalIdPrefixes.ToArray();
+            if (InternalIdPrefixes != null)
+            {
+                if (WriteCompact)
+                    InternalIdPrefixes = newInternalIdPrefixes.ToArray();
+                else
+                    InternalIdPrefixes = Array.Empty<string>();
+            }
             ResourceTypes = newResourceTypes.ToArray();
 
             data.m_BucketDataString = Convert.ToBase64String(bucketStream.ToArray());
