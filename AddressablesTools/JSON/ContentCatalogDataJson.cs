@@ -21,7 +21,7 @@ namespace AddressablesTools.JSON
         public string[] m_Keys { get; set; } // 1.1.3 - 1.16.10
         public SerializedTypeJson[] m_resourceTypes { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string[] m_InternalIdPrefixes { get; set; } // 1.16.10+
+        public string[] m_InternalIdPrefixes { get; set; } // 1.16.10 - 1.21.3 (if compact)
     }
 #pragma warning restore IDE1006
 }
