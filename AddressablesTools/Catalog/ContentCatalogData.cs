@@ -358,11 +358,6 @@ namespace AddressablesTools.Catalog
 
         internal void Write(CatalogBinaryWriter writer, SerializedTypeAsmContainer staCont)
         {
-            if (Version == 1)
-            {
-                throw new NotSupportedException("Only version 2 catalogs are supported for writing so far.");
-            }
-
             writer.Version = Version;
 
             ContentCatalogDataBinaryHeader header = new ContentCatalogDataBinaryHeader();
