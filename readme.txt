@@ -7,6 +7,8 @@ Nightly links:
 - https://nightly.link/nesrak1/AddressablesTools/workflows/build-windows/master/addrtool-example-windows.zip
 - https://nightly.link/nesrak1/AddressablesTools/workflows/build-ubuntu/master/addrtool-example-ubuntu.zip
 
+Nuget link: https://www.nuget.org/packages/AssetsTools.NET.Addressables
+
 Supported versions:
 
 .---------------------------------------------.
@@ -15,10 +17,19 @@ Supported versions:
 | Json  "v1"   | Yes          | Yes           |
 | Json  "v2"   | Yes          | Yes           |
 | Json  "v3"   | Yes          | Yes           |
-| Binv1        | Yes          | No            |
-| Binv1 "v1.1" | Yes          | No            |
+| Binv1        | Yes          | Yes*          |
+| Binv1 "v1.1" | Yes          | Yes*          |
 | Binv2        | Yes          | Yes           |
 `---------------------------------------------`
+
+* - This support has not been thoroughly tested 
+
+---
+
+To use the "Example" command line app to...
+
+- patch catalog CRCs, run `Example patchcrc path/to/catalog.json` (replace .json with .bin if your game uses .bin)
+- search for assets, run `Example searchasset path/to/catalog.json` and then type the key to search for
 
 ---
 
