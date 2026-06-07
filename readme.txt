@@ -42,7 +42,7 @@ From there, you can access the `Resources` dictionary which contains a mapping f
 
 In the `searchasset` example below, we can look up an asset string and find all of the bundles that are needed to load it. To do so, we find all keys that contain the substring we're searching for and that have resource locations with a `ProviderId` of `BundledAssetProvider`. After that, we can look up the `Dependency` id back into the `Resources` dictionary to find all of the necessary bundles. In this list, the first item is always the bundle that contains the asset, and all other bundles are dependencies needed by the first bundle.
 
-This can be useful if you want to know what bundles you need to load in order to load an asset in a tool without having to load _every_ bundle in the game.
+This can be useful if you want to know what bundles you need to load in order to load an asset in a tool without having to load every bundle in the game.
 
 ---
 
